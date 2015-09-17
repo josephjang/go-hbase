@@ -14,6 +14,7 @@ type Get struct {
 	families   [][]byte
 	qualifiers [][][]byte
 	versions   int32
+	filter     *proto.Filter
 }
 
 func CreateNewGet(key []byte) *Get {
@@ -64,6 +65,10 @@ func (this *Get) AddFamily(family []byte) {
 	}
 }
 
+func (this *Get) SetFilter(filter *proto.Filter) {
+	this.filter = filter
+}
+
 func (this *Get) posOfFamily(family []byte) int {
 	for p, v := range this.families {
 		if bytes.Equal(family, v) {
@@ -86,6 +91,7 @@ func (this *Get) toProto() pb.Message {
 	}
 
 	g.MaxVersions = pb.Uint32(uint32(this.versions))
+	g.Filter = this.filter
 
 	return g
 }
