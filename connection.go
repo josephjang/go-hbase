@@ -6,6 +6,7 @@ import (
 
 	"fmt"
 	"net"
+	"sync"
 )
 
 type connection struct {
@@ -17,8 +18,9 @@ type connection struct {
 	socket net.Conn
 	in     *inputStream
 
-	calls  map[int]*call
-	callId *atomicCounter
+	callsMutex sync.RWMutex
+	calls      map[int]*call
+	callId     *atomicCounter
 
 	isMaster bool
 }
@@ -146,7 +148,9 @@ func (c *connection) call(request *call) error {
 	buf := newOutputBuffer()
 	buf.writeDelimitedBuffers(bfrh, bfr)
 
+	c.callsMutex.Lock()
 	c.calls[id] = request
+	c.callsMutex.Unlock()
 	n, err := c.socket.Write(buf.Bytes())
 
 	if err != nil {
@@ -178,12 +182,16 @@ func (c *connection) processMessages() {
 		log.Debug("Responseheader received [id=%d] [conn=%s]", rh.GetCallId(), c.name)
 
 		callId := rh.GetCallId()
+		c.callsMutex.RLock()
 		call, ok := c.calls[int(callId)]
+		c.callsMutex.RUnlock()
 		if !ok {
 			panic(fmt.Errorf("Invalid call id: %d", callId))
 		}
 
+		c.callsMutex.Lock()
 		delete(c.calls, int(callId))
+		c.callsMutex.Unlock()
 
 		exception := rh.GetException()
 		if exception != nil {
